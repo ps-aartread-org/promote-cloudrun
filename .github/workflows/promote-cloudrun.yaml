@@ -56,7 +56,7 @@ jobs:
           service_account: ${{ inputs.gcpServiceAccount }}
 
       - id: auth_json
-        if: ${{ inputs.gcp-auth-method == 'credentials_json' }}
+        if: ${{ inputs.gcpAuthMethod == 'credentials_json' }}
         name: Authenticate to Google Cloud using JSON Key
         uses: google-github-actions/auth@v0
         with:
