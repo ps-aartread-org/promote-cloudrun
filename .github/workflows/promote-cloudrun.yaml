@@ -1,0 +1,77 @@
+
+name: Promote CloudRun
+on:
+  workflow_call:
+    inputs:
+      cloudRunServiceName:
+        description: 'Cloud Run Service Name'
+        required: true
+        type: string
+      gcpAuthMethod:
+        description: 'The method for authenticating with GCP. Supports workload-identity or credentials_json'
+        required: true
+        default: 'credentials_json'
+        type: string
+      gcpProjectId:
+        description: 'The GCP Project ID where Cloud Run is deployed'
+        required: true
+        type: string
+      gcpServiceAccount:
+        description: 'The Service Account used by Workload Identity Federation'
+        required: false
+        type: string
+      githubEnvironment:
+        description: 'The GitHub Environment containing the environment secrets for GOOGLE_CREDENTIALS'
+        required: false
+        type: string
+      regions:
+        description: 'JSON List of regions where the Cloud Run service will be deployed. I.E ["us-central1","us-east1"]'
+        required: true
+        type: string
+      workloadIdentityProvider:
+        description: 'The Workload Identity Provider Endpoint'
+        required: false
+        type: string
+
+jobs:
+  promoteCloudRun:
+    strategy:
+      matrix:
+        regions: ${{fromJson(inputs.regions)}}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.githubEnvironment }}
+    name: Promote Cloud Run Revision
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - id: auth_workload
+        if: ${{ inputs.gcpAuthMethod == 'workload-identity' }}
+        name: Authenticate to Google Cloud using Workload Identity Federation
+        uses: google-github-actions/auth@v0
+        with:
+          workload_identity_provider: ${{ inputs.workfloadIdentityProvider }}
+          token_format: access_token
+          service_account: ${{ inputs.gcpServiceAccount }}
+
+      - id: auth_json
+        if: ${{ inputs.gcp-auth-method == 'credentials_json' }}
+        name: Authenticate to Google Cloud using JSON Key
+        uses: google-github-actions/auth@v0
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          project_id: ${{ inputs.gcpProjectId }}
+          install_components: 'beta'
+          
+      - name: Promote CloudRun Service
+        run: |
+          gcloud beta run services update-traffic ${{ inputs.cloudRunServiceName }} \
+            --clear-tags \
+            --to-latest \
+            --region=${{ matrix.regions }}
